@@ -56,8 +56,19 @@ class TinTuyenDungViewSetTests(APITestCase):
 
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(len(response.data), 1)
-		self.assertEqual(response.data[0]["tin_id"], self.open_job.tin_id)
-		self.assertEqual(response.data[0]["trang_thai"], TinTuyenDung.TrangThai.DANG_MO)
+		payload = response.data[0]
+		self.assertEqual(payload["tin_id"], self.open_job.tin_id)
+		self.assertEqual(payload["trang_thai"], TinTuyenDung.TrangThai.DANG_MO)
+		self.assertEqual(payload["title"], self.open_job.tieu_de)
+		self.assertEqual(payload["description"], self.open_job.noi_dung)
+		self.assertEqual(payload["summary"], self.open_job.noi_dung)
+		self.assertEqual(payload["salary"], "120.00 / giờ")
+		self.assertEqual(payload["status"], "Đang mở")
+		self.assertEqual(payload["openings"], 1)
+		self.assertEqual(payload["location"], self.open_job.dia_diem_lam_viec)
+		self.assertIn("raw", payload)
+		self.assertEqual(payload["raw"]["tin_id"], self.open_job.tin_id)
+		self.assertEqual(payload["raw"]["tieu_de"], self.open_job.tieu_de)
 
 	def test_list_can_filter_by_keyword(self):
 		response = self.client.get(self.list_url, {"q": "python"})
@@ -65,6 +76,7 @@ class TinTuyenDungViewSetTests(APITestCase):
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]["tin_id"], self.open_job.tin_id)
+		self.assertEqual(response.data[0]["summary"], self.open_job.noi_dung)
 
 	def test_list_can_filter_by_location(self):
 		response = self.client.get(self.list_url, {"dia_diem": "da nang"})
