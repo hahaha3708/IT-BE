@@ -28,4 +28,5 @@ urlpatterns = [
     path('api/accounts/', include('modules.accounts.urls')),
     path('api/profiles/', include('modules.profiles.urls')),
     path('api/jobs/', include('modules.jobs.urls')),
+    path('api/v1/', include('modules.candidate_viewing.urls')),
 ]

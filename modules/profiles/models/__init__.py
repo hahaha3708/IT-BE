@@ -10,11 +10,15 @@ class HoSoUngVien(models.Model):
 		related_name="ho_so_ung_vien",
 	)
 	ho_ten = models.CharField(max_length=255)
+	avatar = models.CharField(max_length=500, null=True, blank=True)
 	so_dien_thoai = models.CharField(max_length=20, null=True, blank=True)
 	ky_nang = models.TextField(null=True, blank=True)
 	vi_tri_mong_muon = models.CharField(max_length=255, null=True, blank=True)
+	location = models.CharField(max_length=255, null=True, blank=True)
 	thoi_gian_ranh = models.CharField(max_length=255, null=True, blank=True)
+	availability_slots = models.JSONField(default=list, blank=True)
 	luong_mong_muon = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
 		db_table = "HO_SO_UNG_VIEN"
