@@ -16,16 +16,19 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from core.views import HealthCheckView
-from modules.accounts.views import TestTokenView
+from modules.accounts.views import TestTokenView, TokenObtainPairSwaggerView, TokenRefreshSwaggerView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('api/health/', HealthCheckView.as_view(), name='health-check'),
-    path('api/auth/token/', TokenObtainPairView.as_view(), name='token-obtain-pair'),
-    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('api/auth/token/', TokenObtainPairSwaggerView.as_view(), name='token-obtain-pair'),
+    path('api/auth/token/refresh/', TokenRefreshSwaggerView.as_view(), name='token-refresh'),
     path('api/auth/test-token/', TestTokenView.as_view(), name='test-token'),
     path('api/accounts/', include('modules.accounts.urls')),
     path('api/profiles/', include('modules.profiles.urls')),

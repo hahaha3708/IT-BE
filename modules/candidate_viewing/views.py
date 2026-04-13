@@ -1,7 +1,8 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions
+from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 
 from modules.candidate_viewing.pagination import CandidatePagination
 from modules.candidate_viewing.permissions import IsEmployer
@@ -58,7 +59,33 @@ class BaseCandidateSearchAPIView(APIView):
 		return Response(paginated_payload)
 
 
+class CandidatePaginationResponseSerializer(serializers.Serializer):
+	page = serializers.IntegerField()
+	limit = serializers.IntegerField()
+	total = serializers.IntegerField()
+	results = CandidateListItemSerializer(many=True)
+
+
+candidate_search_parameters = [
+	OpenApiParameter(name='page', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY, required=False, description='1-based page number'),
+	OpenApiParameter(name='limit', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY, required=False, description='Page size up to 100'),
+	OpenApiParameter(name='sort', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Sort order. Allowed values: matching_desc, updated_desc.'),
+	OpenApiParameter(name='q', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Search by candidate name or skills'),
+	OpenApiParameter(name='location', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='Location filter'),
+	OpenApiParameter(name='salary_min', type=OpenApiTypes.NUMBER, location=OpenApiParameter.QUERY, required=False, description='Minimum expected salary'),
+	OpenApiParameter(name='salary_max', type=OpenApiTypes.NUMBER, location=OpenApiParameter.QUERY, required=False, description='Maximum expected salary'),
+	OpenApiParameter(name='availability_slots', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, required=False, description='JSON array string of availability slots'),
+]
+
+
 class CandidateListAPIView(BaseCandidateSearchAPIView):
+	@extend_schema(
+		summary='List candidates',
+		description='Return employer-visible candidates with search, filter, sort and pagination support.',
+		tags=['candidate-viewing'],
+		parameters=candidate_search_parameters,
+		responses={200: CandidatePaginationResponseSerializer},
+	)
 	def get(self, request):
 		params = self.get_search_params()
 		queryset = self.get_queryset(params)
@@ -66,6 +93,16 @@ class CandidateListAPIView(BaseCandidateSearchAPIView):
 
 
 class MatchedCandidateListAPIView(BaseCandidateSearchAPIView):
+	@extend_schema(
+		summary='List matched candidates for a job',
+		description='Return candidates scored against a specific job posting. Employer role required.',
+		tags=['candidate-viewing'],
+		parameters=[
+			OpenApiParameter(name='job_id', type=OpenApiTypes.INT, location=OpenApiParameter.PATH, required=True, description='Job posting ID'),
+			*candidate_search_parameters,
+		],
+		responses={200: CandidatePaginationResponseSerializer, 404: OpenApiResponse(description='Job not found')},
+	)
 	def get(self, request, job_id):
 		params = self.get_search_params()
 		job = get_object_or_404(TinTuyenDung, pk=job_id)
@@ -76,6 +113,15 @@ class MatchedCandidateListAPIView(BaseCandidateSearchAPIView):
 class CandidateDetailAPIView(APIView):
 	permission_classes = [permissions.IsAuthenticated, IsEmployer]
 
+	@extend_schema(
+		summary='Get candidate detail',
+		description='Return a candidate profile with reviews and summary information. Employer role required.',
+		tags=['candidate-viewing'],
+		parameters=[
+			OpenApiParameter(name='candidate_id', type=OpenApiTypes.INT, location=OpenApiParameter.PATH, required=True, description='Candidate profile ID'),
+		],
+		responses={200: CandidateDetailSerializer, 404: OpenApiResponse(description='Candidate not found')},
+	)
 	def get(self, request, candidate_id):
 		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
 		reviews = list(
