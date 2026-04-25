@@ -1,6 +1,7 @@
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema, extend_schema_view
 
+from modules.accounts.models import NguoiDung
 from modules.profiles.models import HoSoCongTy, HoSoUngVien
 from modules.profiles.serializers import HoSoCongTySerializer, HoSoUngVienSerializer
 
@@ -62,6 +63,19 @@ class HoSoUngVienViewSet(viewsets.ModelViewSet):
 	queryset = HoSoUngVien.objects.all()
 	serializer_class = HoSoUngVienSerializer
 
+	def get_queryset(self):
+		user = self.request.user
+		if user.is_superuser:
+			return HoSoUngVien.objects.all()
+		return HoSoUngVien.objects.filter(ung_vien=user)
+
+	def perform_create(self, serializer):
+		if self.request.user.vai_tro != NguoiDung.VaiTro.UNG_VIEN:
+			raise serializers.ValidationError({"detail": "Chỉ ứng viên mới có thể tạo hồ sơ ứng viên."})
+		if HoSoUngVien.objects.filter(ung_vien=self.request.user).exists():
+			raise serializers.ValidationError({"detail": "Hồ sơ ứng viên đã tồn tại."})
+		serializer.save(ung_vien=self.request.user)
+
 
 @extend_schema_view(
 	list=extend_schema(
@@ -115,3 +129,16 @@ class HoSoUngVienViewSet(viewsets.ModelViewSet):
 class HoSoCongTyViewSet(viewsets.ModelViewSet):
 	queryset = HoSoCongTy.objects.all()
 	serializer_class = HoSoCongTySerializer
+
+	def get_queryset(self):
+		user = self.request.user
+		if user.is_superuser:
+			return HoSoCongTy.objects.all()
+		return HoSoCongTy.objects.filter(cong_ty=user)
+
+	def perform_create(self, serializer):
+		if self.request.user.vai_tro != NguoiDung.VaiTro.CONG_TY:
+			raise serializers.ValidationError({"detail": "Chỉ công ty mới có thể tạo hồ sơ công ty."})
+		if HoSoCongTy.objects.filter(cong_ty=self.request.user).exists():
+			raise serializers.ValidationError({"detail": "Hồ sơ công ty đã tồn tại."})
+		serializer.save(cong_ty=self.request.user)

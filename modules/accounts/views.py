@@ -104,7 +104,11 @@ class TokenObtainPairWithTypeSerializer(TokenObtainPairSerializer):
 		tags=['accounts'],
 		auth=[],
 		request=NguoiDungCreateRequestSerializer,
-		responses={201: NguoiDungSerializer},
+		responses={
+			201: NguoiDungSerializer,
+			400: OpenApiResponse(description='Invalid registration payload or weak password'),
+			409: OpenApiResponse(description='Email already exists'),
+		},
 		examples=[
 			OpenApiExample(
 				'name',
@@ -166,6 +170,7 @@ class TokenObtainPairSwaggerView(TokenObtainPairView):
 		responses={
 			200: TokenPairResponseSerializer,
 			401: OpenApiResponse(description='Invalid credentials'),
+				429: OpenApiResponse(description='Too many login attempts'),
 		},
 		examples=[
 			OpenApiExample(
@@ -235,7 +240,11 @@ class LogoutView(APIView):
 		description='Invalidate refresh token by adding it to the blacklist.',
 		tags=['auth'],
 		request=LogoutRequestSerializer,
-		responses={200: OpenApiResponse(description='Logged out successfully'), 401: OpenApiResponse(description='Invalid token')},
+		responses={
+			200: OpenApiResponse(description='Logged out successfully'),
+			400: OpenApiResponse(description='Missing refresh token'),
+			401: OpenApiResponse(description='Invalid token'),
+		},
 	)
 	def post(self, request):
 		serializer = LogoutRequestSerializer(data=request.data)

@@ -39,6 +39,96 @@ Cap nhat thong tin MySQL trong `.env`.
 
 ## API co ban
 
+## Auth JWT flow
+
+IT-BE hien da ho tro flow auth day du bang JWT. FE co the dung cac endpoint sau:
+
+### 1. Dang ky
+
+```http
+POST /api/auth/register/
+```
+
+Body:
+
+```json
+{
+	"email": "candidate@example.com",
+	"password": "Secret123!",
+	"vai_tro": "ung_vien"
+}
+```
+
+### 2. Dang nhap
+
+```http
+POST /api/auth/login/
+```
+
+Body:
+
+```json
+{
+	"email": "candidate@example.com",
+	"password": "Secret123!"
+}
+```
+
+Response:
+
+```json
+{
+	"access": "...",
+	"refresh": "...",
+	"token_type": "Bearer"
+}
+```
+
+### 3. Lay user hien tai
+
+```http
+GET /api/auth/me/
+Authorization: Bearer <access>
+```
+
+### 4. Refresh access token
+
+```http
+POST /api/auth/token/refresh/
+```
+
+Body:
+
+```json
+{
+	"refresh": "..."
+}
+```
+
+### 5. Dang xuat
+
+```http
+POST /api/auth/logout/
+Authorization: Bearer <access>
+```
+
+Body:
+
+```json
+{
+	"refresh": "..."
+}
+```
+
+### Luu y
+
+- Access token dung de goi endpoint protected.
+- Refresh token dung de lay access moi va se bi blacklist sau logout.
+- Endpoint cu van ton tai de backward compatibility:
+  - `POST /api/auth/token/`
+  - `POST /api/auth/token/refresh/`
+  - `POST /api/accounts/users/`
+
 ## Test token endpoint (khong can login)
 
 De test nhanh cac endpoint can JWT khi sprint chua co login/logout, co the dung endpoint:
