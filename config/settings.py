@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'modules.chats.apps.ChatsConfig',
     'modules.reviews.apps.ReviewsConfig',
     'modules.notifications.apps.NotificationsConfig',
+    'modules.candidate_matching.apps.CandidateMatchingConfig',
 ]
 
 MIDDLEWARE = [
