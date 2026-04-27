@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db import transaction
 from rest_framework import serializers, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -20,6 +21,7 @@ from drf_spectacular.utils import (
 
 from modules.accounts.models import NguoiDung
 from modules.accounts.serializers import NguoiDungSerializer
+from modules.profiles.models import HoSoUngVien
 
 
 class TokenObtainRequestSerializer(serializers.Serializer):
@@ -31,6 +33,13 @@ class NguoiDungCreateRequestSerializer(serializers.Serializer):
 	email = serializers.EmailField()
 	password = serializers.CharField(write_only=True)
 	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices)
+	# Profile fields (optional, for candidates during registration)
+	ho_ten = serializers.CharField(required=False, allow_blank=True)
+	gioi_thieu = serializers.CharField(required=False, allow_blank=True)
+	hoc_van = serializers.ListField(child=serializers.DictField(), required=False)
+	chung_chi = serializers.ListField(child=serializers.DictField(), required=False)
+	ngoai_ngu = serializers.ListField(child=serializers.DictField(), required=False)
+	du_an = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class TokenPairResponseSerializer(serializers.Serializer):
@@ -154,6 +163,33 @@ class NguoiDungViewSet(viewsets.ModelViewSet):
 		if self.action == "create":
 			self.throttle_scope = "auth_register"
 		return super().get_throttles()
+
+	def perform_create(self, serializer):
+		with transaction.atomic():
+			user = serializer.save()
+
+			# Khi ứng viên vừa đăng ký, tạo luôn hồ sơ với các thông tin nếu có
+			if user.vai_tro == NguoiDung.VaiTro.UNG_VIEN:
+				profile_defaults = {
+					'ho_ten': self.request.data.get('ho_ten') or user.email.split('@')[0],
+					'avatar': None,
+					'so_dien_thoai': None,
+					'ky_nang': '',
+					'vi_tri_mong_muon': '',
+					'location': '',
+					'thoi_gian_ranh': '',
+					'availability_slots': [],
+					'luong_mong_muon': None,
+					'gioi_thieu': self.request.data.get('gioi_thieu', ''),
+					'hoc_van': self.request.data.get('hoc_van', []),
+					'chung_chi': self.request.data.get('chung_chi', []),
+					'ngoai_ngu': self.request.data.get('ngoai_ngu', []),
+					'du_an': self.request.data.get('du_an', []),
+				}
+				HoSoUngVien.objects.get_or_create(
+					ung_vien=user,
+					defaults=profile_defaults,
+				)
 
 
 class TokenObtainPairSwaggerView(TokenObtainPairView):

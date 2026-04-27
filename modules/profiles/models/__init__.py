@@ -18,6 +18,11 @@ class HoSoUngVien(models.Model):
 	thoi_gian_ranh = models.CharField(max_length=255, null=True, blank=True)
 	availability_slots = models.JSONField(default=list, blank=True)
 	luong_mong_muon = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+	gioi_thieu = models.TextField(null=True, blank=True)
+	hoc_van = models.JSONField(default=list, blank=True)
+	chung_chi = models.JSONField(default=list, blank=True)
+	ngoai_ngu = models.JSONField(default=list, blank=True)
+	du_an = models.JSONField(default=list, blank=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
