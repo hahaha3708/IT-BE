@@ -37,6 +37,30 @@ class TinTuyenDungSerializer(serializers.ModelSerializer):
 
         return data
 
+
+    def to_internal_value(self, data):
+        """
+        Dịch dữ liệu từ API (Tiếng Anh) sang DB (Tiếng Việt) khi Frontend gọi PUT/PATCH
+        """
+        # Tạo một bản sao có thể chỉnh sửa của data
+        mapped_data = data.copy() if hasattr(data, 'copy') else dict(data)
+        
+        # Ánh xạ các trường
+        if 'title' in mapped_data:
+            mapped_data['tieu_de'] = mapped_data.pop('title')
+        if 'description' in mapped_data:
+            mapped_data['noi_dung'] = mapped_data.pop('description')
+        if 'salary' in mapped_data: # Hoặc hourly_rate tùy frontend gửi
+            # Chú ý: frontend có thể gửi "50000 / giờ", cần filter lấy số nếu cần, 
+            # hoặc frontend phải gửi đúng số (VD: 50000)
+            mapped_data['luong_theo_gio'] = mapped_data.pop('salary') 
+        if 'status' in mapped_data:
+            mapped_data['trang_thai'] = mapped_data.pop('status')
+        if 'location' in mapped_data:
+            mapped_data['dia_diem_lam_viec'] = mapped_data.pop('location')
+
+        return super().to_internal_value(mapped_data)
+
     def get_recruitment_type(self, instance):
         return getattr(instance, "hinh_thuc_tuyen_dung", None) or "Chưa cập nhật"
 

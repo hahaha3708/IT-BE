@@ -16,7 +16,7 @@ load_dotenv(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-key")
-
+DATABASE_MIGRATION_FORMATTER = None
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'modules.accounts.apps.AccountsConfig',
     'modules.profiles.apps.ProfilesConfig',
     'modules.jobs.apps.JobsConfig',
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'modules.chats.apps.ChatsConfig',
     'modules.reviews.apps.ReviewsConfig',
     'modules.notifications.apps.NotificationsConfig',
+    'modules.candidate_matching.apps.CandidateMatchingConfig',
 ]
 
 MIDDLEWARE = [
@@ -124,6 +126,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_USER_MODEL = 'accounts.NguoiDung'
 
@@ -135,6 +139,13 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': os.getenv('THROTTLE_AUTH_LOGIN', '10/minute'),
+        'auth_register': os.getenv('THROTTLE_AUTH_REGISTER', '5/minute'),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -159,6 +170,8 @@ SPECTACULAR_SETTINGS = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 # Test token endpoint settings (for integration testing without login flow)

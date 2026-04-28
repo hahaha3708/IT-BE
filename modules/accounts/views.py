@@ -1,9 +1,13 @@
 from django.conf import settings
+from django.db import transaction
 from rest_framework import serializers, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.utils import (
@@ -17,6 +21,7 @@ from drf_spectacular.utils import (
 
 from modules.accounts.models import NguoiDung
 from modules.accounts.serializers import NguoiDungSerializer
+from modules.profiles.models import HoSoUngVien
 
 
 class TokenObtainRequestSerializer(serializers.Serializer):
@@ -28,11 +33,19 @@ class NguoiDungCreateRequestSerializer(serializers.Serializer):
 	email = serializers.EmailField()
 	password = serializers.CharField(write_only=True)
 	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices)
+	# Profile fields (optional, for candidates during registration)
+	ho_ten = serializers.CharField(required=False, allow_blank=True)
+	gioi_thieu = serializers.CharField(required=False, allow_blank=True)
+	hoc_van = serializers.ListField(child=serializers.DictField(), required=False)
+	chung_chi = serializers.ListField(child=serializers.DictField(), required=False)
+	ngoai_ngu = serializers.ListField(child=serializers.DictField(), required=False)
+	du_an = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class TokenPairResponseSerializer(serializers.Serializer):
 	access = serializers.CharField()
 	refresh = serializers.CharField()
+	token_type = serializers.CharField()
 
 
 class TokenRefreshRequestSerializer(serializers.Serializer):
@@ -41,6 +54,8 @@ class TokenRefreshRequestSerializer(serializers.Serializer):
 
 class TokenRefreshResponseSerializer(serializers.Serializer):
 	access = serializers.CharField()
+	refresh = serializers.CharField(required=False)
+	token_type = serializers.CharField(required=False)
 
 
 class TestTokenRequestSerializer(serializers.Serializer):
@@ -67,6 +82,24 @@ class NguoiDungPatchRequestSerializer(serializers.Serializer):
 	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices, required=False)
 
 
+class MeResponseSerializer(serializers.Serializer):
+	id = serializers.IntegerField()
+	email = serializers.EmailField()
+	vai_tro = serializers.ChoiceField(choices=NguoiDung.VaiTro.choices)
+	is_active = serializers.BooleanField()
+
+
+class LogoutRequestSerializer(serializers.Serializer):
+	refresh = serializers.CharField()
+
+
+class TokenObtainPairWithTypeSerializer(TokenObtainPairSerializer):
+	def validate(self, attrs):
+		data = super().validate(attrs)
+		data["token_type"] = "Bearer"
+		return data
+
+
 @extend_schema_view(
 	list=extend_schema(
 		summary='List users',
@@ -80,7 +113,11 @@ class NguoiDungPatchRequestSerializer(serializers.Serializer):
 		tags=['accounts'],
 		auth=[],
 		request=NguoiDungCreateRequestSerializer,
-		responses={201: NguoiDungSerializer},
+		responses={
+			201: NguoiDungSerializer,
+			400: OpenApiResponse(description='Invalid registration payload or weak password'),
+			409: OpenApiResponse(description='Email already exists'),
+		},
 		examples=[
 			OpenApiExample(
 				'name',
@@ -115,14 +152,51 @@ class NguoiDungPatchRequestSerializer(serializers.Serializer):
 class NguoiDungViewSet(viewsets.ModelViewSet):
 	queryset = NguoiDung.objects.all().order_by("id")
 	serializer_class = NguoiDungSerializer
+	throttle_classes = [ScopedRateThrottle]
 
 	def get_permissions(self):
 		if self.action == "create":
 			return [AllowAny()]
 		return [IsAuthenticated()]
 
+	def get_throttles(self):
+		if self.action == "create":
+			self.throttle_scope = "auth_register"
+		return super().get_throttles()
+
+	def perform_create(self, serializer):
+		with transaction.atomic():
+			user = serializer.save()
+
+			# Khi ứng viên vừa đăng ký, tạo luôn hồ sơ với các thông tin nếu có
+			if user.vai_tro == NguoiDung.VaiTro.UNG_VIEN:
+				profile_defaults = {
+					'ho_ten': self.request.data.get('ho_ten') or user.email.split('@')[0],
+					'avatar': None,
+					'so_dien_thoai': None,
+					'ky_nang': '',
+					'vi_tri_mong_muon': '',
+					'location': '',
+					'thoi_gian_ranh': '',
+					'availability_slots': [],
+					'luong_mong_muon': None,
+					'gioi_thieu': self.request.data.get('gioi_thieu', ''),
+					'hoc_van': self.request.data.get('hoc_van', []),
+					'chung_chi': self.request.data.get('chung_chi', []),
+					'ngoai_ngu': self.request.data.get('ngoai_ngu', []),
+					'du_an': self.request.data.get('du_an', []),
+				}
+				HoSoUngVien.objects.get_or_create(
+					ung_vien=user,
+					defaults=profile_defaults,
+				)
+
 
 class TokenObtainPairSwaggerView(TokenObtainPairView):
+	serializer_class = TokenObtainPairWithTypeSerializer
+	throttle_classes = [ScopedRateThrottle]
+	throttle_scope = "auth_login"
+
 	@extend_schema(
 		summary='Obtain JWT pair',
 		description='Authenticate using email and password and receive access and refresh tokens.',
@@ -132,6 +206,7 @@ class TokenObtainPairSwaggerView(TokenObtainPairView):
 		responses={
 			200: TokenPairResponseSerializer,
 			401: OpenApiResponse(description='Invalid credentials'),
+				429: OpenApiResponse(description='Too many login attempts'),
 		},
 		examples=[
 			OpenApiExample(
@@ -165,7 +240,60 @@ class TokenRefreshSwaggerView(TokenRefreshView):
 		],
 	)
 	def post(self, request, *args, **kwargs):
-		return super().post(request, *args, **kwargs)
+		response = super().post(request, *args, **kwargs)
+		if response.status_code == status.HTTP_200_OK:
+			response.data["token_type"] = "Bearer"
+		return response
+
+
+class MeView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(
+		summary='Get current user',
+		description='Return basic profile information of the authenticated user.',
+		tags=['auth'],
+		responses={200: MeResponseSerializer, 401: OpenApiResponse(description='Missing or invalid token')},
+	)
+	def get(self, request):
+		user = request.user
+		return Response(
+			{
+				"id": user.id,
+				"email": user.email,
+				"vai_tro": user.vai_tro,
+				"is_active": user.is_active,
+			},
+			status=status.HTTP_200_OK,
+		)
+
+
+class LogoutView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	@extend_schema(
+		summary='Logout user',
+		description='Invalidate refresh token by adding it to the blacklist.',
+		tags=['auth'],
+		request=LogoutRequestSerializer,
+		responses={
+			200: OpenApiResponse(description='Logged out successfully'),
+			400: OpenApiResponse(description='Missing refresh token'),
+			401: OpenApiResponse(description='Invalid token'),
+		},
+	)
+	def post(self, request):
+		serializer = LogoutRequestSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+
+		refresh_token = serializer.validated_data["refresh"]
+		try:
+			token = RefreshToken(refresh_token)
+			token.blacklist()
+		except TokenError:
+			return Response({"detail": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
+
+		return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
 
 
 class TestTokenView(APIView):
