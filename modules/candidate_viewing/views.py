@@ -6,7 +6,11 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiType
 
 from modules.candidate_viewing.pagination import CandidatePagination
 from modules.candidate_viewing.permissions import IsEmployer
-from modules.candidate_viewing.serializers import CandidateDetailSerializer, CandidateListItemSerializer
+from modules.candidate_viewing.serializers import (
+	CandidateDetailSerializer,
+	CandidateEvaluationSerializer,
+	CandidateListItemSerializer,
+)
 from modules.candidate_viewing.services import (
 	apply_candidate_filters,
 	calculate_matching_score,
@@ -139,3 +143,66 @@ class CandidateDetailAPIView(APIView):
 			},
 		)
 		return Response(serializer.data)
+
+
+class CandidateEvaluationAPIView(APIView):
+	permission_classes = [permissions.IsAuthenticated, IsEmployer]
+
+	@extend_schema(
+		summary='Get candidate evaluation',
+		description='Return current application status and employer review for a candidate. Employer role required.',
+		tags=['candidate-viewing'],
+		parameters=[
+			OpenApiParameter(name='candidate_id', type=OpenApiTypes.INT, location=OpenApiParameter.PATH, required=True, description='Candidate profile ID'),
+		],
+	)
+	def get(self, request, candidate_id):
+		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
+		from modules.applications.models import UngTuyen
+		application = UngTuyen.objects.filter(ung_vien=candidate).order_by("-thoi_gian_ung_tuyen").first()
+		
+		review = None
+		if application:
+			review = DanhGia.objects.filter(ung_tuyen=application, nguoi_danh_gia=request.user).first()
+		
+		serializer = CandidateEvaluationSerializer(
+			candidate,
+			context={"application": application, "review": review}
+		)
+		return Response(serializer.data)
+
+	@extend_schema(
+		summary='Update candidate evaluation',
+		description='Update application status and create/update employer review. Employer role required.',
+		tags=['candidate-viewing'],
+		request=OpenApiTypes.OBJECT,
+		responses={200: OpenApiTypes.OBJECT, 400: OpenApiResponse(description='Invalid data')},
+	)
+	def post(self, request, candidate_id):
+		candidate = get_object_or_404(HoSoUngVien, pk=candidate_id)
+		from modules.applications.models import UngTuyen
+		application = UngTuyen.objects.filter(ung_vien=candidate).order_by("-thoi_gian_ung_tuyen").first()
+		
+		if not application:
+			return Response({"detail": "Ứng viên chưa có đơn ứng tuyển nào."}, status=400)
+			
+		status = request.data.get("status")
+		rating = request.data.get("rating")
+		comment = request.data.get("comment")
+		
+		if status:
+			application.trang_thai = status
+			application.save()
+			
+		if rating is not None:
+			DanhGia.objects.update_or_create(
+				ung_tuyen=application,
+				nguoi_danh_gia=request.user,
+				defaults={
+					"nguoi_nhan_danh_gia": candidate.ung_vien,
+					"diem_so": rating,
+					"nhan_xet": comment
+				}
+			)
+			
+		return Response({"message": "Cập nhật đánh giá thành công."})

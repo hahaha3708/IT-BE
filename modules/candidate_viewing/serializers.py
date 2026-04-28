@@ -48,3 +48,36 @@ class CandidateDetailSerializer(serializers.Serializer):
 			"reviews": build_review_items(reviews),
 			"certifications": [],
 		}
+
+
+class CandidateEvaluationSerializer(serializers.Serializer):
+	candidate_id = serializers.IntegerField(source="ung_vien_id", read_only=True)
+	full_name = serializers.CharField(source="ho_ten", read_only=True)
+	email = serializers.EmailField(source="ung_vien.email", read_only=True)
+	phone_number = serializers.CharField(source="so_dien_thoai", read_only=True)
+	position = serializers.SerializerMethodField()
+	applied_date = serializers.SerializerMethodField()
+	status = serializers.SerializerMethodField()
+	rating = serializers.SerializerMethodField()
+	comment = serializers.SerializerMethodField()
+	cv_url = serializers.CharField(source="avatar", read_only=True)
+
+	def get_position(self, instance):
+		app = self.context.get("application")
+		return app.tin.tieu_de if app else "Chưa ứng tuyển"
+
+	def get_applied_date(self, instance):
+		app = self.context.get("application")
+		return app.thoi_gian_ung_tuyen.strftime("%Y-%m-%d") if app else None
+
+	def get_status(self, instance):
+		app = self.context.get("application")
+		return app.trang_thai if app else None
+
+	def get_rating(self, instance):
+		review = self.context.get("review")
+		return review.diem_so if review else 0
+
+	def get_comment(self, instance):
+		review = self.context.get("review")
+		return review.nhan_xet if review else ""
